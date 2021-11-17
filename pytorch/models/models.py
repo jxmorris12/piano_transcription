@@ -10,8 +10,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torchlibrosa.stft import Spectrogram, LogmelFilterBank
-from pytorch_utils import move_data_to_device
 
+def move_data_to_device(x, device):
+    if 'float' in str(x.dtype):
+        x = torch.Tensor(x)
+    elif 'int' in str(x.dtype):
+        x = torch.LongTensor(x)
+    else:
+        return x
+
+    return x.to(device)
 
 def init_layer(layer):
     """Initialize a Linear or Convolutional layer. """
@@ -146,7 +154,7 @@ class AcousticModelCRnn8Dropout(nn.Module):
 
         x = x.transpose(1, 2).flatten(2)
         x = F.relu(self.bn5(self.fc5(x).transpose(1, 2)).transpose(1, 2))
-        x = F.dropout(x, p=0.5, training=self.training, inplace=True)
+        x = F.dropout(x, p=0.5, training=self.training, inplace=False)
         
         (x, _) = self.gru(x)
         x = F.dropout(x, p=0.5, training=self.training, inplace=False)
@@ -254,6 +262,7 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
             'reg_offset_output': reg_offset_output, 
             'frame_output': frame_output, 
             'velocity_output': velocity_output}
+        print('output_dict:', {k: v.shape for k, v in output_dict.items()}, f'(input.shape = {input.shape})')
 
         return output_dict
 

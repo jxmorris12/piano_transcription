@@ -3,13 +3,14 @@
 # ============ Inference using pretrained model ============
 # Download checkpoint and inference
 CHECKPOINT_PATH="CRNN_note_F1=0.9677_pedal_F1=0.9186.pth"
-wget -O $CHECKPOINT_PATH "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
+#wget -O $CHECKPOINT_PATH "https://zenodo.org/record/4034264/files/CRNN_note_F1%3D0.9677_pedal_F1%3D0.9186.pth?download=1"
 MODEL_TYPE="Note_pedal"
 python3 pytorch/inference.py --model_type=$MODEL_TYPE --checkpoint_path=$CHECKPOINT_PATH --audio_path='resources/cut_liszt.mp3' --cuda
 
 # ============ Train piano transcription system from scratch ============
 # MAESTRO dataset directory. Users need to download MAESTRO dataset into this folder.
-DATASET_DIR="./datasets/maestro/dataset_root"
+# DATASET_DIR="./datasets/maestro/dataset_root"
+DATASET_DIR="./datasets/maestro-v2.0.0/"
 
 # Modify to your workspace
 WORKSPACE="./workspaces/piano_transcription"

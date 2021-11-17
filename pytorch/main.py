@@ -20,12 +20,15 @@ import torch.utils.data
 from utilities import (create_folder, get_filename, create_logging, 
     StatisticsContainer, RegressionPostProcessor) 
 from data_generator import MaestroDataset, Augmentor, Sampler, TestSampler, collate_fn
-from models import Regress_onset_offset_frame_velocity_CRNN, Regress_pedal_CRNN
+from models import Regress_onset_offset_frame_velocity_CRNN, Regress_pedal_CRNN, Regress_onset_offset_frame_velocity_S4
 from pytorch_utils import move_data_to_device
 from losses import get_loss_func
 from evaluate import SegmentEvaluator
 import config
 
+import wandb
+
+torch.autograd.set_detect_anomaly(True)
 
 def train(args):
     """Train a piano transcription system.
@@ -65,7 +68,7 @@ def train(args):
     segment_samples = int(segment_seconds * sample_rate)
     frames_per_second = config.frames_per_second
     classes_num = config.classes_num
-    num_workers = 8
+    num_workers = 8 # TODO(jxm): configure automatically
 
     # Loss function
     loss_func = get_loss_func(loss_type)
@@ -107,6 +110,7 @@ def train(args):
     # Model
     Model = eval(model_type)
     model = Model(frames_per_second=frames_per_second, classes_num=classes_num)
+    print('model:', model)
 
     if augmentation == 'none':
         augmentor = None
@@ -169,6 +173,16 @@ def train(args):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, 
         betas=(0.9, 0.999), eps=1e-08, weight_decay=0., amsgrad=True)
 
+    # Init W&B
+    wandb_project_name = 'bytedance_transcription'
+    wandb.init(
+        entity='jxmorris12',
+        project=os.environ.get('WANDB_PROJECT', wandb_project_name),
+        job_type='train',
+        config=args
+    )
+    wandb.watch(model)
+
     # Resume training
     if resume_iteration > 0:
         resume_checkpoint_path = os.path.join(workspace, 'checkpoints', filename, 
@@ -208,6 +222,7 @@ def train(args):
             validate_statistics = evaluator.evaluate(validate_loader)
             test_statistics = evaluator.evaluate(test_loader)
 
+
             logging.info('    Train statistics: {}'.format(evaluate_train_statistics))
             logging.info('    Validation statistics: {}'.format(validate_statistics))
             logging.info('    Test statistics: {}'.format(test_statistics))
@@ -225,6 +240,17 @@ def train(args):
                 ''.format(train_time, validate_time))
 
             train_bgn_time = time.time()
+
+            # Log statistics to weights & biases
+            evaluate_train_statistics = {'train_' + k: v for k, v in evaluate_train_statistics.items()}
+            wandb.log(evaluate_train_statistics, step=iteration)
+
+            validate_statistics = {'val_' + k: v for k, v in validate_statistics.items()}
+            wandb.log(validate_statistics, step=iteration)
+
+            test_statistics = {'test_' + k: v for k, v in test_statistics.items()}
+            wandb.log(test_statistics, step=iteration)
+
         
         # Save model
         if iteration % 20000 == 0:
@@ -245,15 +271,18 @@ def train(args):
                 param_group['lr'] *= 0.9
         
         # Move data to device
+        device_data_dict = {}
         for key in batch_data_dict.keys():
-            batch_data_dict[key] = move_data_to_device(batch_data_dict[key], device)
+            device_data_dict[key] = move_data_to_device(batch_data_dict[key], device)
          
         model.train()
-        batch_output_dict = model(batch_data_dict['waveform'])
+        batch_output_dict = model(device_data_dict['waveform'])
 
-        loss = loss_func(model, batch_output_dict, batch_data_dict)
+        # breakpoint()
+        loss = loss_func(model, batch_output_dict, device_data_dict)
+        wandb.log({'loss': loss}, step=iteration)
 
-        print(iteration, loss)
+        print(f'{iteration}/{early_stop}', loss)
 
         # Backward
         loss.backward()

@@ -202,6 +202,8 @@ class Sampler(object):
          ...]"""
 
         logging.info('{} segments: {}'.format(split, len(self.segment_list)))
+        if len(self.segment_list) == 0:
+            raise Exception(f'Cannot initialize split {split} with empty segment list - check path of hdf5s folder {hdf5s_dir}')
 
         self.pointer = 0
         self.segment_indexes = np.arange(len(self.segment_list))
